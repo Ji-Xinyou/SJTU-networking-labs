@@ -1,0 +1,11 @@
+{
+    "PORT": 2021,
+    "FILENAME": "file.txt",
+    "FILESIZE": 8,
+    "MAX_BACKLOG": 10,
+    "PACKETSIZE": 1024,
+    "MAX_FILE": 12,
+    "FILE_OVER_FLOW": "OVERFLOW",
+    "NR_HOST": 6,
+    "NR_THREAD": 4
+}
