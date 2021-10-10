@@ -24,7 +24,7 @@ if __name__ == '__main__':
     sock_recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock_recv.connect(("10.0.0.1", PORT))
 
-    t_start = time.time()
+    # t_start = time.time()
     TTBYTES = size_byte
     buffer = ""
     while TTBYTES != 0:
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         with open(filename, "w", encoding="utf-8") as f:
             for l in buffer:
                 f.write(l)
-    t_end = time.time()
+    # t_end = time.time()
     sock_recv.close()
 
     # print("TOTAL TIME SPENT: %.4f seconds\n" % (t_end - t_start))
