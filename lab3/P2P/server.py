@@ -65,8 +65,8 @@ def accept_and_transmit(chunks, ips):
         if count == 1:
             print("\n\nThis is the server, request your file please!\n")
 
-        sock_trans, client_ip = sock_listn.accept()
-
+        sock_trans, client_ip_tuple = sock_listn.accept()
+        client_ip, _ = client_ip_tuple
         # default FILESIZE is 8MB, change it in macro.py
         chunkidx = ips.index(client_ip)
         chunk_to_send = chunks[chunkidx]
@@ -75,6 +75,7 @@ def accept_and_transmit(chunks, ips):
         count = 0
         while chunksize_byte != 0:
             content = chunk_to_send[count * PACKETSIZE: (count + 1) * PACKETSIZE]
+            content = content.encode('utf8')
             sock_trans.send(content)
             chunksize_byte -= len(content)
             count += 1

@@ -6,7 +6,7 @@
     "PACKETSIZE": 1024,
     "MAX_FILE": 12,
     "FILE_OVER_FLOW": "OVERFLOW",
-    "NR_HOST": 6,
+    "NR_HOST": 4,
     "NR_THREAD": 4,
     "P2P_CLIENT_PORT": 2022
 }

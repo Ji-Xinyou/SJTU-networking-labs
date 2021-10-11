@@ -4,7 +4,7 @@ Having a socket to listen to requests for local file chunk is essential here
 '''
 
 import socket
-import time
+from time import sleep
 import os
 import json
 import threading
@@ -48,12 +48,19 @@ def getfilename():
             return "save%d.txt" % i
     return FILE_OVER_FLOW
 
+# get local ip through udp
 def get_local_ip():
-    hostname = socket.gethostname()
-    ip = socket.gethostbyname(hostname)
+    try:
+        s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        while s.connect_ex(("10.0.0.1", 80)) != 0:
+            sleep(1)
+        ip= s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
 
 def calc_size_each_chunk():
-    totalsize = FILESIZE
+    totalsize = FILESIZE * 1024 * 1024
     totalchunk = NR_CHUNK
     each_chunksize_int = totalsize // totalchunk
     chunk_size = []
@@ -67,10 +74,11 @@ class listenThread(threading.Thread):
     '''
     ListenThread not only just serve the clients by transmitting the local chunk
     #! it first downloads the local chunk from server!
-    #! remember to set the is_local_rdy to True after local trunk is ready
+    #! remember to set the is_local_rdy to True after local chunk is ready
     '''
 
     def __init__(self, localip, ips, chunk_size, chunks):
+        threading.Thread.__init__(self)
         self.localip = localip
         self.ips = ips
         self.chunk_size = chunk_size
@@ -78,25 +86,53 @@ class listenThread(threading.Thread):
 
     def run(self):
         print("I am the listening thread of %s", self.localip)
-        #! first, request the local trunk
+        #! first, request the local chunk
         sock_download = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        sock_download.connect(("10.0.0.1", SERVERPORT))
+        while sock_download.connect_ex(("10.0.0.1", SERVERPORT)) != 0:
+            sleep(1)
+        print("connected")
 
         selfchunkidx = self.ips.index(self.localip)        
         totalsize = self.chunk_size[selfchunkidx]
         while totalsize != 0:
-            content = sock_download.rev(PACKETSIZE).decode()
+            content = sock_download.recv(PACKETSIZE).decode()
             if content != "":
-                chunks[selfchunkidx] += content
+                self.chunks[selfchunkidx] += content
                 totalsize -= len(content)
-        # local trunk transfer done, set the global variable
+        # local chunk transfer done, set the global variable
+        global is_local_rdy
         is_local_rdy = True
         sock_download.close()
-
-        #! second, listen and transmit local trunk
+        print("OVER")
+        #! second, listen and transmit local chunk
+        #TODO: now serial, maybe parallel?
         sock_listn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         sock_listn.bind((self.localip, CLIENTPORT)) # bind to localhost
         sock_listn.listen(MAX_BACKLOG)
+
+        count = 0
+        while(1):
+            if count == 1:
+                print("Localrchunk download rdy, start serving other clients")
+
+            sock_trans, client_ip = sock_listn.accept()
+            local_chunk_size = self.chunk_size[selfchunkidx]
+            local_chunk = self.chunks[selfchunkidx]
+
+            count = 0
+            while local_chunk_size != 0:
+                content = local_chunk[count * PACKETSIZE: (count + 1) * PACKETSIZE]
+                content = content.encode('utf8')
+                sock_trans.send(content)
+                local_chunk_size -= len(content)
+                count += 1
+
+            sock_trans.close()
+            print("local chunk sent to %s", client_ip)
+            count += 1
+
+
+
 
 class downloadThread(threading.Thread):
     '''
@@ -106,6 +142,7 @@ class downloadThread(threading.Thread):
     chunks: chunks to be saved in order
     '''
     def __init__(self, localip, ips, NR_CHUNK, chunk_size, chunks):
+        threading.Thread.__init__(self)
         # self.chunks is the chunks to be saves
         self.localip = localip
         # ips is all host's ips
@@ -114,7 +151,7 @@ class downloadThread(threading.Thread):
         self.chunk_size = chunk_size
     
     def run(self):
-        print("I am the downloading thread of %s", self.localip)
+        print("I am the downloading thread of %s " % self.localip)
 
         chunkidx_needed = [i for i in range(NR_CHUNK)]
         selfchunkidx = self.ips.index(self.localip)
@@ -125,7 +162,10 @@ class downloadThread(threading.Thread):
         for idx in chunkidx_needed:
             sock_download = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
             ip_to_connect = self.ips[idx]
-            sock_download.connect((ip_to_connect, CLIENTPORT))
+            while sock_download.connect_ex((ip_to_connect, CLIENTPORT)) != 0:
+                sleep(1)
+                print("trying to connect to %s" % ip_to_connect)
+            print("Connected to %s" % ip_to_connect)
             totalsize = self.chunk_size[idx]
             while totalsize != 0:
                 content = sock_download.recv(PACKETSIZE).decode()
@@ -133,9 +173,11 @@ class downloadThread(threading.Thread):
                     self.chunks[idx] += content
                     totalsize -= len(content)
             sock_download.close()
-
+            print("Chunk %d downloaded to local %d" % (idx, selfchunkidx))
+        
         filename = getfilename()
-        # blocked here, until all trunks is ready
+        # blocked here, until all chunks are ready
+        global is_local_rdy
         while (is_local_rdy is False):
             pass
 
@@ -151,6 +193,8 @@ class downloadThread(threading.Thread):
 # two jobs, give out local chunks, download remote chunk
 if __name__ == '__main__':
     localip = get_local_ip()
+    ips = getips()
+    chunk_size = calc_size_each_chunk()
     #! chunks list is modified by threads!!!!!!!!!!!!!!
     #TODO remember to pass the chunks list to both threads!!!!!!!! 
     chunks = ["" for _ in range(NR_CHUNK)] 
@@ -158,4 +202,8 @@ if __name__ == '__main__':
     # download thread works until all chunks are downloaded
 
     is_local_rdy = False
-    
+
+    listen_thread = listenThread(localip, ips, chunk_size, chunks)
+    download_thread = downloadThread(localip, ips, NR_CHUNK, chunk_size, chunks)
+    download_thread.start()
+    listen_thread.start()
