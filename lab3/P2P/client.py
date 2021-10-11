@@ -111,6 +111,7 @@ class listenThread(threading.Thread):
         sock_listn.listen(MAX_BACKLOG)
 
         count = 0
+        served = []
         while(1):
             if count == 1:
                 print("Localrchunk download rdy, start serving other clients")
@@ -129,7 +130,12 @@ class listenThread(threading.Thread):
 
             sock_trans.close()
             print("local chunk sent to %s", client_ip)
+            served.append(client_ip)
             count += 1
+            if len(served) == NR_HOST - 1:
+                sock_listn.close()
+                break
+        return
 
 
 
@@ -164,7 +170,7 @@ class downloadThread(threading.Thread):
             ip_to_connect = self.ips[idx]
             while sock_download.connect_ex((ip_to_connect, CLIENTPORT)) != 0:
                 sleep(1)
-                print("trying to connect to %s" % ip_to_connect)
+                # print("trying to connect to %s" % ip_to_connect)
             print("Connected to %s" % ip_to_connect)
             totalsize = self.chunk_size[idx]
             while totalsize != 0:
@@ -185,6 +191,8 @@ class downloadThread(threading.Thread):
             with open(filename, "w", encoding="utf-8") as f:
                 for chunk in self.chunks:
                     f.write(chunk)
+        print("My name is %s, all chunks are saved in local directory!" % localip)
+        return
         
 
 
@@ -205,5 +213,9 @@ if __name__ == '__main__':
 
     listen_thread = listenThread(localip, ips, chunk_size, chunks)
     download_thread = downloadThread(localip, ips, NR_CHUNK, chunk_size, chunks)
+
     download_thread.start()
     listen_thread.start()
+
+    download_thread.join()
+    listen_thread.join()

@@ -31,9 +31,17 @@ class C_S_topo( Topo ):
         for client, client_sw in zip( clients, clients_sw ):
             self.addLink( client, client_sw )
         
-        # connect the clients' sw to server's sw
-        for client_sw in clients_sw:
-            self.addLink( server_sw, client_sw )
+        #### TO BE FAIR, same topology as P2P topology ####
+        # for client_sw in clients_sw:                    #
+        #     self.addLink( server_sw, client_sw )        #
+        #### TO BE FAIR, same topology as P2P topology ####
+
+        # wire up server and host1 (h0 and h1)
+        self.addLink( 's0', 's1' )
+
+        # wire up host1 to host2, host2 to host3, host3 to host4 ...
+        for i in range( len(clients_sw) - 1 ):
+            self.addLink( clients_sw[i], clients_sw[i + 1] )
             
 def run( nr_host: int ):
     topo = C_S_topo( nr_host=nr_host )

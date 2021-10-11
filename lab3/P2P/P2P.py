@@ -1,6 +1,8 @@
 '''
-This P2P implementation is hardcoded (file trunk in fixed host)
-Only implemented for 4, 6 and 8 hosts P2P connection
+This P2P implementation is not hardcoded, but certain file is transmitted to 
+certain clients
+This implementation allows any # of hosts!
+Change # of hosts, size of file, .. etc in **macro.json**
 
 One server, multiple clients
 

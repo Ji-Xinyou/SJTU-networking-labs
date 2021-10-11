@@ -4,5 +4,5 @@ h2 python3 client.py &
 h3 python3 client.py &
 h4 python3 client.py &
 h5 python3 client.py &
-time h6 python3 client.py
+h6 python3 client.py
 h1 rm -rf save*.txt
