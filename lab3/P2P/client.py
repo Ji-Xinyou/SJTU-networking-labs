@@ -216,6 +216,3 @@ if __name__ == '__main__':
 
     download_thread.start()
     listen_thread.start()
-
-    download_thread.join()
-    listen_thread.join()
