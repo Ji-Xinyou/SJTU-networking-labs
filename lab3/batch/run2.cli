@@ -1,3 +1,0 @@
-h1 python3 client.py &
-time h2 python3 client.py
-h1 rm -rf save*.txt
