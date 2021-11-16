@@ -44,72 +44,74 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.timestamp = 0
         self.state = 'up'
 
-    def send_to_group(self, dp):
+    def send_to_group_1(self, dp):
         '''
-        Modify group entry message
-        The controller sends this message to modify the group table of the datapath.
+        For s1 and s2
         '''
         ofp = dp.ofproto
         parser = dp.ofproto_parser
         
-        # s1 and s2 should be added into a group
-        # the groupAction should has two entries, but only one shall be taken
-        # since the OFPGT_FF is used
-        
-        # when sending packets, duplicate it to both port
-        # when receiving packets, only receive one
-        
-        # port2 has the priority
-        watch_group = ofproto_v1_3.OFPQ_ALL
-        
-        # when sending packet, use group_id = 7
+        # port2 has the priority        
         buckets = []
         actions = [parser.OFPActionOutput(2)]
         buckets.append(parser.OFPBucket(watch_port=2,
                                         actions=actions))
-    
+        # port3 for backup
         actions = [parser.OFPActionOutput(3)]
         buckets.append(parser.OFPBucket(watch_port=3,
                                         actions=actions))
         
         req = parser.OFPGroupMod(datapath=dp,
+                                 command=ofp.OFPGC_ADD,
                                  type_=ofp.OFPGT_FF,
-                                 group_id=7,
+                                 group_id=1,
                                  buckets=buckets)
         dp.send_msg(req)
         
-        # when receving, use another group, w/ group_id = 8
-        buckets = []
-        actions = [parser.OFPActionOutput(1)]
-        buckets.append(parser.OFPBucket(watch_port=2,
-                                        actions=actions))
-    
-        buckets.append(parser.OFPBucket(watch_port=3,
-                                        actions=actions))
         
-        req = parser.OFPGroupMod(datapath=dp,
-                                 type_=ofp.OFPGT_FF,
-                                 group_id=8,
-                                 buckets=buckets)
-        dp.send_msg(req)
+    def send_to_group_2(self, dp):
+        '''
+        For s3 and s4 (in_port=1)
+        '''
+        ofp = dp.ofproto
+        parser = dp.ofproto_parser
         
-        # help packet of s3 recover (for in_port=1)
-        # port2 -> 2 port1 -> 1
         buckets = []
         actions = [parser.OFPActionOutput(2)]
         buckets.append(parser.OFPBucket(watch_port=2,
                                         actions=actions))
         # if port2 failed, goes to port1
-        actions = [parser.OFPActionOutput(1)]
-        buckets.append(parser.OFPBucket(actions=actions))
+        actions = [parser.OFPActionOutput(ofp.OFPP_IN_PORT)]
+        buckets.append(parser.OFPBucket(watch_port=1,
+                                        actions=actions))
         req = parser.OFPGroupMod(datapath=dp,
+                                 command=ofp.OFPGC_ADD,
                                  type_=ofp.OFPGT_FF,
-                                 group_id=9,
+                                 group_id=2,
                                  buckets=buckets)
         dp.send_msg(req)
-
         
+    def send_to_group_3(self, dp):
+        '''
+        For s3 and s4 (in_port=2)
+        '''
+        ofp = dp.ofproto
+        parser = dp.ofproto_parser
         
+        buckets = []
+        actions = [parser.OFPActionOutput(1)]
+        buckets.append(parser.OFPBucket(watch_port=1,
+                                        actions=actions))
+        # if port2 failed, goes to port1
+        actions = [parser.OFPActionOutput(ofp.OFPP_IN_PORT)]
+        buckets.append(parser.OFPBucket(watch_port=2,
+                                        actions=actions))
+        req = parser.OFPGroupMod(datapath=dp,
+                                 command=ofp.OFPGC_ADD,
+                                 type_=ofp.OFPGT_FF,
+                                 group_id=3,
+                                 buckets=buckets)
+        dp.send_msg(req)      
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -131,72 +133,76 @@ class SimpleSwitch13(app_manager.RyuApp):
         
         # ==================== CORE PART FOR GROUP TABLE ===================
         
-        # s1 lo:  s1-eth1:h1-eth0 s1-eth2:s3-eth1 s1-eth3:s4-eth1
-        # s2 lo:  s2-eth1:h2-eth0 s2-eth2:s3-eth2 s2-eth3:s4-eth2
-        # s3 lo:  s3-eth1:s1-eth2 s3-eth2:s2-eth2
-        # s4 lo:  s4-eth1:s1-eth3 s4-eth2:s2-eth3
+        '''
+        s1 lo:  s1-eth1:h1-eth0 s1-eth2:s3-eth1 s1-eth3:s4-eth1
+        s2 lo:  s2-eth1:h2-eth0 s2-eth2:s3-eth2 s2-eth3:s4-eth2
+        s3 lo:  s3-eth1:s1-eth2 s3-eth2:s2-eth2
+        s4 lo:  s4-eth1:s1-eth3 s4-eth2:s2-eth3
+        '''
         
         if datapath.id == 1:
-            # packets from host1 goes to group table
-            self.send_to_group(datapath)
-            actions = [parser.OFPActionGroup(group_id=7)]
+            self.send_to_group_1(datapath)
             match = parser.OFPMatch(in_port=1)
+            actions = [parser.OFPActionGroup(group_id=1)]
             self.add_flow(datapath, 7, match, actions)
-
-            # return entries
-            actions = [parser.OFPActionGroup(group_id=8)]
+            
             match = parser.OFPMatch(in_port=2)
-            self.add_flow(datapath, 7, match, actions)
-
-            actions = [parser.OFPActionGroup(group_id=8)]
-            match = parser.OFPMatch(in_port=3)
-            self.add_flow(datapath, 7, match, actions)
-            
-            # recover
-            actions = [parser.OFPActionOutput(3)]
-            match = parser.OFPMatch(in_port=2, eth_dst=0x2)
-            self.add_flow(datapath, 8, match, actions)
-            
             actions = [parser.OFPActionOutput(1)]
-            match = parser.OFPMatch(in_port=3, eth_dst=0x1)
+            self.add_flow(datapath, 7, match, actions)
+            
+            match = parser.OFPMatch(in_port=3)
+            actions = [parser.OFPActionOutput(1)]
+            self.add_flow(datapath, 7, match, actions)
+            
+            match = parser.OFPMatch(in_port=2, eth_dst=0x2)
+            actions = [parser.OFPActionOutput(3)]
             self.add_flow(datapath, 8, match, actions)
+            
+            match = parser.OFPMatch(in_port=3, eth_dst=0x2)
+            actions = [parser.OFPActionOutput(2)]
+            self.add_flow(datapath, 8, match, actions) 
         
         if datapath.id == 2:
-            # packets from host1 goes to group table
-            self.send_to_group(datapath)
-            actions = [parser.OFPActionGroup(group_id=7)]
+            self.send_to_group_1(datapath)
             match = parser.OFPMatch(in_port=1)
+            actions = [parser.OFPActionGroup(group_id=1)]
             self.add_flow(datapath, 7, match, actions)
-
-            # return entries
-            actions = [parser.OFPActionGroup(group_id=8)]
+            
             match = parser.OFPMatch(in_port=2)
+            actions = [parser.OFPActionOutput(1)]
             self.add_flow(datapath, 7, match, actions)
-
-            actions = [parser.OFPActionGroup(group_id=8)]
+            
             match = parser.OFPMatch(in_port=3)
             self.add_flow(datapath, 7, match, actions)
             
-            actions = [parser.OFPActionOutput(1)]
-            match = parser.OFPMatch(in_port=3, eth_dst=0x2)
+            match = parser.OFPMatch(in_port=2, eth_dst=0x1)
+            actions = [parser.OFPActionOutput(3)]
             self.add_flow(datapath, 8, match, actions)
             
+            match = parser.OFPMatch(in_port=3, eth_dst=0x1)
+            actions = [parser.OFPActionOutput(2)]
+            self.add_flow(datapath, 8, match, actions) 
+            
         if datapath.id == 3:
-            actions = [parser.OFPActionOutput(1)]
-            match = parser.OFPMatch(in_port=2)
+            self.send_to_group_2(datapath)
+            match = parser.OFPMatch(in_port=1)
+            actions = [parser.OFPActionGroup(group_id=2)]
             self.add_flow(datapath, 7, match, actions)
             
-            match = parser.OFPMatch(in_port=1)
-            actions = [parser.OFPActionGroup(group_id=9)]
+            self.send_to_group_3(datapath)
+            match = parser.OFPMatch(in_port=2)
+            actions = [parser.OFPActionGroup(group_id=3)]
             self.add_flow(datapath, 7, match, actions)
         
         if datapath.id == 4:
-            actions = [parser.OFPActionOutput(1)]
-            match = parser.OFPMatch(in_port=2)
+            self.send_to_group_2(datapath)
+            match = parser.OFPMatch(in_port=1)
+            actions = [parser.OFPActionGroup(group_id=2)]
             self.add_flow(datapath, 7, match, actions)
             
-            actions = [parser.OFPActionOutput(2)]
-            match = parser.OFPMatch(in_port=1)
+            self.send_to_group_3(datapath)
+            match = parser.OFPMatch(in_port=2)
+            actions = [parser.OFPActionGroup(group_id=3)]
             self.add_flow(datapath, 7, match, actions)
         
         # ==================== CORE PART FOR GROUP TABLE ===================

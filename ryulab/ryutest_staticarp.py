@@ -22,7 +22,7 @@ def Test():
     net = Mininet( switch=OVSSwitch,
                    host=CPULimitedHost, 
                    link=TCLink,
-                   autoStaticArp=False, controller=RemoteController)
+                   autoStaticArp=True, controller=RemoteController)
     switch1 = net.addSwitch('s1')
     switch2 = net.addSwitch('s2')
     switch3 = net.addSwitch('s3')
